@@ -1,0 +1,1377 @@
+---
+title: "Gasmet data import"
+output: html_document
+---
+# overview, tasks
+gather all gasmet data and compile it into .csv files for analysis
+
+*to do*  
+* use code from 'Analysis of OREI data for Rosemount...' to code in the creation of cumulative time. See lines 69+
+* gather and import orei manure data collected in rosemount prior to blue tablet. Currently waiting on serial cable for importing data off of PDA after not finding it on SD card in PDA nor red tablet
+* extract plot numbers from all file names
+* in tli data, there are plots 115 and 114 that I don't know what they are referring too and can't figure out what they should be based on the filename.
+
+
+*current issues*
+changed import from google sheets to csv's in the Downloads folder, issue is occurruing with how these files are being read sadly.
+I propose moving forward, we just record site and plot number in file name. Date and time is stored within spe file
+
+*algorithm* 
+download and gather all data into a folder 
+select just .spe files
+drag these .spe files into calcmet so they can all be analyzed in a batch and have a single output (.TXT)
+import these .txt files into R
+tidy (add helpers,
+      extract identifiers,
+      classify)
+export csv for respective projects
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE, 
+                      warning = FALSE)
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(googlesheets4, tidyverse, lubridate)
+
+options(scipen=999) #reduce scientific notation 
+options(digits=4)   # only print 4 sig figs
+```
+
+# temp and vwc
+
+```{r, cache=T}
+# library(googlesheets4)
+# driveurl<-"https://docs.google.com/spreadsheets/d/15ABmTZSQgAmpn7lz3296Emhy5O5XSOqFCLQPpaENBc4/edit#gid=0"
+# 
+# dat.temp<-read_sheet(driveurl, gs4_auth())
+
+# dat.temp<-read_sheet(driveurl, gs4_auth(),
+#                 sheet = 1,
+#                 col_names = TRUE)
+
+dat.temp <- read.csv("Gasmet Temp VWC 2021+2020 - all.csv")
+
+```
+
+
+```{r}
+
+dat.temp$date
+# lubridate::parse_date_time(dat.temp$date, orders = '%y/%m/%d') for google sheet
+lubridate::parse_date_time(dat.temp$date, orders = '%m/%d/%y')
+
+dat.temp <- dat.temp %>%
+  mutate(date=parse_date_time(dat.temp$date, orders = '%m/%d/%y'))
+
+# dat.temp<-dat.temp %>%
+#   mutate(date=as.Date(date))
+
+```
+
+
+```{r tallying, eval=F}
+
+unique(dat.temp$experiment)
+unique(dat.temp$date)
+
+
+dat.temp %>%
+  filter(experiment=="orei.manure")  %>%
+  group_by(date) %>%
+  tally()
+
+dat.temp %>%
+  filter(experiment=="orei.manure")  %>%
+  group_by(date) %>%
+  tally()
+# we have 11 sampling dates currently entered
+# plus 1 mystery date with 10 entries
+
+unique(subset(dat.temp,experiment=="orei.manure")$date)
+
+
+# 4/5/2021
+# 4/29
+# 5/18
+# 6/15
+# 7/8
+# 7/16
+# 8/10
+# 10/15
+# 10/25
+
+```
+
+how many gasmet entries do we have for orei-manure in 2021
+
+```{r visualize distributions, eval=F}
+library(lattice)
+densityplot(~vwc,dat.temp)
+
+densityplot(~vwc|date,dat.temp)
+
+densityplot(~vwc|date,subset(dat.temp, date=="2021-9-14")) # malfunction teros 12
+
+densityplot(~temp|date,dat.temp)
+
+```
+
+
+
+
+# gasmet data import
+1. importing all data on blue tablet. (Measurements span all of 2021 and some of 2020)
+2. importing data from google drive uploaded by tli (2020 OREI gasmet, 2021 OREI gasmet)
+
+
+```{r blue tablet}
+# dat <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/blah.txt")
+# View(dat)
+#only 16003 observations of the 21566 got transferred from calcmet into text file
+#at 5410kb, that's 2.96 observation per kb, at 21566 observations, we should expect a 7291kb file 
+#second try only brought in 5000 observations
+#third try brought in 10000 observations
+
+
+# we are going to import in batches, rbind the datasets
+# keep all batches below 5000 because calcmet seems to sometimes ignore spec files in batches>5000
+# sort by name, A-Z, starting files are eddyflux
+# first import, 0-4802, ending at end of  eddyflux_v08_07202021
+# second import 4802-9693, ending at end of orei_r34_08102021
+# third import 9693-14560, ending at end of till_105_04282021
+# fourth import 14560-19136, ending at end of till_v17_08022021
+# fifth import 19136-21566?, ending at ZERO_17433
+
+
+
+dat.1 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.0.4802.4802.txt")
+# success!
+
+dat.2 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.4802.9693.4891.txt")
+# success!
+
+dat.3 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.9693.14560.4867.txt")
+
+dat.4 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.14560.19136.4576.txt")
+
+dat.5 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.19136.21566.2430.txt")
+
+dat <- rbind(dat.1,dat.2,dat.3,dat.4, dat.5)
+
+rm(dat.1,dat.2,dat.3,dat.4,dat.5)
+
+```
+
+
+```{r tli orei manure files from google drive}
+#2021 orei gasmet spectrum files
+# https://drive.google.com/drive/folders/1-hj96ifD5dJqMWOnwgAMJqFmBvTdjtwP
+#should be 3604 observations
+dat.6 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/tli.orei.2021.txt")
+#check spectrum file name is from calcmetsamplereanalyze folder
+
+#2020 orei gasmet files
+#should be 7318 observations
+# need to break down into two seperate files
+# filtered on name column, A-Z order with A first
+# selected 3440 items, ending on IERO1024202016_000192, file1
+# then selected 3878 items, ending in OREI0605202010_000001, file2
+# https://drive.google.com/drive/folders/1OOJzSGe713_2jUOH6GmTK3wukjMtkZXO
+dat.7 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/tli.orei.2020.1.txt")
+
+dat.8 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/tli.orei.2020.2.txt")
+
+# calcmet log shows some spec files cannot be read
+dat <- rbind(dat,dat.6, dat.7, dat.8)
+rm(dat.6, dat.7, dat.8)
+
+```
+
+```{r tli LAW files from google drive, eval=F}
+
+# James Bowden says he doesn't want LAW data
+
+# #2020 tli LAW files
+# dat.9 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/tli.law.2020.txt")
+# # should be 2012 items
+# 
+# dat.10 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/tli.law.2021.txt")
+# # should be 2336 items
+# 
+# dat <- rbind(dat,dat.9, dat.10)
+# rm(dat.9, dat.10)
+
+```
+
+
+```{r umn data from pda}
+# ONLY BACKGROUND FILE ON THIS DEVICE RECORDS BACKGROUND MAX OF 31,000 ON 5MAY2020
+# need to cross-reference with google drive
+
+dat.11 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/pda.fancy.txt")
+# all files imported correctly
+
+dat <- rbind(dat,dat.11)
+rm(dat.11)
+
+
+```
+
+
+```{r helpers}
+dat1 <- dat %>%
+  dplyr::select(Date,Time,SpectrumFile,Carbon.dioxide.CO2,
+                Nitrous.oxide.N2O,Methane.CH4,
+                Ammonia.NH3,Cell.temperature) %>%
+  rename(date=Date,
+         time=Time,
+         co2=Carbon.dioxide.CO2,
+         spectrumfile=SpectrumFile,
+         n20=Nitrous.oxide.N2O,
+         ch4=Methane.CH4,
+         nh3=Ammonia.NH3,
+         temp=Cell.temperature) %>%
+  mutate(V6=NA,
+         V7=as.character(NA),
+         V8=as.character(NA),
+         V9=as.character(NA),
+         V10=as.character(NA),.before=n20)
+# I am adding these NA vectors so the `for loops` can fill them.
+# n20,ch4,nh3 and temp were added after most of code was written
+# this is why you don't hard code!
+
+dat1 <- tibble::rowid_to_column(dat1,"id")
+
+dat1 <- dat1 %>%
+  filter(id!=19787, id!=19786) 
+
+# View(dat1)
+```
+
+```{r spectrumfile name extraction}
+library(stringr)
+
+##need to make sure still works with new data imported
+
+#from documents/spec craziness folder
+# dat1 <- dat1 %>%
+#   mutate(nametype=str_detect(dat1$spectrumfile,"spec.craziness")) %>%
+#   as.data.frame()
+
+dat1 <- dat1 %>%
+  mutate(V6=str_detect(dat1$spectrumfile,"spec.craziness")) %>%
+  as.data.frame()
+
+for (i in 1:length(dat1$id)){
+if (dat1[i,6]==T){
+  dat1[i,7]<-str_sub(dat1[i,4],start = 44,end = -5)
+} else {
+  dat1[i,7]<-dat1[i,7]
+}}
+
+#from downloads/2021 folder (James orei TLI data)
+
+dat1 <- dat1 %>%
+  mutate(V6=str_detect(dat1$spectrumfile,"OREI gasmet spectrum")) %>%
+  as.data.frame() 
+
+
+for (i in 1:length(dat1$id)){
+if (dat1[i,6]==T){
+  dat1[i,7]<-str_sub(dat1[i,4],start = 86,end = -5)
+} else {
+  dat1[i,7]<-dat1[i,7]
+}}
+
+
+dat1 <- dat1 %>%
+  mutate(V6=str_detect(dat1$spectrumfile,"pda.fancy")) %>%
+  as.data.frame() 
+
+
+
+for (i in 1:length(dat1$id)){
+if (dat1[i,6]==T){
+  dat1[i,7]<-str_sub(dat1[i,4],start = 60,end = -5)
+} else {
+  dat1[i,7]<-dat1[i,7]
+}}
+
+
+# dat1 <- dat1 %>%
+#   mutate(V6=str_detect(dat1$spectrumfile,"LAW gasmet spectrum")) %>%
+#   as.data.frame() 
+# 
+# 
+# for (i in 1:length(dat1$id)){
+# if (dat1[i,6]==T){
+#   dat1[i,7]<-str_sub(dat1[i,4],start = 85,end = -5)
+# } else {
+#   dat1[i,7]<-dat1[i,7]
+# }}
+# 
+# dat1 <- dat1 %>%
+#   mutate(V6=str_detect(dat1$spectrumfile,"LAW gasmet spe files")) %>%
+#   as.data.frame() 
+# 
+# # dat1<-relocate(dat1,V6,.before = nametype)
+# 
+# 
+# for (i in 1:length(dat1$id)){
+# if (dat1[i,6]==T){
+#   dat1[i,7]<-str_sub(dat1[i,4],start = 80,end = -5)
+# } else {
+#   dat1[i,7]<-dat1[i,7]
+# }}
+
+
+dat1 <- dat1 %>%
+  rename(nametype=V6,
+         name=V7)
+
+dat1$name <- str_to_lower(dat1$name)
+unique(str_sub(dat1$name,1,3))
+#^name column is good!
+
+
+```
+
+
+```{r difftime}
+# data is too messy to do this prior to cleaning up names
+# will need to do this specific to each project
+
+# dat1 <- dat1 %>%
+#   # rename(indicat=V10) %>%
+#   # group_by(str_sub(name,1,10)) %>%
+#   arrange(str_sub(name,1,10),time)
+# # we have duplicate orei manure samples
+# 
+# dat1
+# str_sub(dat1$name,1,10)
+# 
+# 
+# dat1$indicat<-NA
+# dat1$indicat[1]<-1
+# for(i in 2:length(dat1$id)){
+#   if(dat1[i,2] == dat1[i-1,2]){
+#     dat1[i,10]<-0
+#   }else{
+#     dat1[i,10]<-1
+#   }}
+# 
+# dat1<-as.data.frame(dat1)
+# dat1$difftime<-NA
+# dat1$difftime[1]<-0
+# for(i in 2:length(dat1$id)){
+#   if(dat1[i,15] == 0){
+#     dat1[i,17]<-as.numeric(difftime(dat1[i,13],dat1[i-1,13])) +
+#       dat1[i-1,17]
+#   }else{
+#     dat1[i,17]<-0
+#   }}
+
+```
+
+# orei manure data extraction
+
+new PDA only added one sampling date 22May2020
+
+
+
+```{r quick file for James}
+# gather all data for James
+
+unique(str_sub(dat1$name,1,5))
+
+dat1 <- dat1 %>%
+  mutate(V8=str_sub(dat1$name,1,5)) %>%
+  rename(filter=V8)
+
+nams<-unique(str_sub(dat1$name,1,5));nams
+length(nams)
+nams[c(-(1:3),-7,-(9:11),-(27:46))]#double check the hard coding
+
+nams.jams<-nams[c(-(1:3),-7,-(9:11),-(27:46))]
+nams.jams.umn <- nams[c(4:6,8)] #splitting out because I already wrote code that worked for the umn files before tli code was given to me
+# nams.jams.tli <- nams[12:36];nams.jams.tli
+nams.jams.tli.orei <- nams[12:26];nams.jams.tli.orei
+# nams.jams.tli.law <- nams[26:36];nams.jams.tli.law
+
+dat.james <- dat1 %>%
+  filter(filter %in% nams.jams)
+
+write.csv(subset(dat.james[-c(8:10,6)]), 
+          file = "james.data.all.untidy.csv")
+
+```
+
+
+Need to parse out information from file name; site,plot number
+
+
+```{r dat james clean}
+# dat1 <- dat1 %>%
+#   mutate(nametype=str_detect(dat1$spectrumfile,"20210422")) %>%
+#   as.data.frame()
+
+# unique(str_sub(dat1$name,1,5))
+# unique(str_sub(dat.james$name,1,7))
+#need to lengthen name to capture difference between orei_r3 and orei_ro
+
+dat.james.umn <- dat.james %>%
+  filter(filter %in% nams.jams.umn) %>%
+  mutate(filter=str_sub(.$name,1,7),
+         len=str_length(.$name),.before=V9)
+
+# dat.james.umn <- dat.james.umn %>%
+#   filter(filter=="manurer"| filter=="orei_04" | filter=="orei_r3" | filter=="orei_ro"| filter=="oreiman"| filter== "r_orei_" )
+
+# str_length(dat.james$name)
+# unique(str_length(dat.james$name))
+# length(unique(str_length(dat.james.umn$name)))
+# # there are 5 unique name lengths
+# length(unique(dat.james.umn$filter))
+# #there are 6 unique names
+
+```
+
+The experiment, date and time factors are all correct, all we need to extract from the name is the plot number
+
+for each filter, we need to detect if the naming system is consistent. For example, are all names starting with manurerose followed by the plot number
+
+```{r finding parse points, eval=F}
+#code used to find parce points in filename
+
+# filter=="manurer"
+dat.james %>%
+  filter(filter=="manurer") %>%
+  mutate(plot=str_sub(name,12,15)) %>%
+  dplyr::select(name,plot)
+
+dat.james %>%
+  filter(filter=="manurer") %>%
+  mutate(plot=str_sub(name,12,15)) %>%
+  dplyr::select(name,plot) %>%
+  as.data.frame()
+
+dummy <- dat.james %>%
+  filter(filter=="manurer") %>%
+  mutate(plot=str_sub(name,12,14)) %>%
+  dplyr::select(name,plot) %>%
+  as.data.frame()
+
+unique(dummy[,2])
+length(unique(dummy[,2]))
+#all plots seem good
+
+# filter=="orei_04" 
+dat.james %>%
+  filter(filter=="orei_04")
+
+dat.james %>%
+  filter(filter=="orei_04") %>%
+  mutate(plot=str_sub(name,15,17)) %>%
+  dplyr::select(name,plot)
+
+dummy <- dat.james %>%
+  filter(filter=="orei_04") %>%
+  mutate(plot=str_sub(name,15,17)) %>%
+  dplyr::select(name,plot) %>%
+  as.data.frame()
+
+unique(dummy[,2])
+length(unique(dummy[,2]))
+
+dummy %>%
+  filter(plot=="201") %>%
+  tally()
+
+dummy %>%
+  filter(plot=="202") %>%
+  tally()
+
+dummy %>%
+  filter(plot=="203") %>%
+  tally()
+
+# filter=="orei_r3" 
+dat.james %>%
+  filter(filter=="orei_r3")
+
+dat.james %>%
+  filter(filter=="orei_r3") %>%
+  mutate(plot=str_sub(name,19,21)) %>%
+  dplyr::select(name,plot)
+
+dummy <- dat.james %>%
+  filter(filter=="orei_r3") %>%
+  mutate(plot=str_sub(name,19,21)) %>%
+  dplyr::select(name,plot) %>%
+  as.data.frame()
+
+unique(dummy[,2])
+
+length(unique(dummy[,2]))
+
+# filter=="oreiman", len==27
+
+dat.james %>%
+  filter(len==27 & filter=="oreiman")
+# ok there are 2 lengths here, one one sampling day the date is appreviated from 11052020 to 110520, need to split out into 2 groups
+
+dat.james %>%
+  filter(len==27 & filter=="oreiman") %>%
+  mutate(plot=str_sub(name,19,21)) %>%
+  dplyr::select(name,plot)
+
+dummy <- dat.james %>%
+  filter(len==27 & filter=="oreiman") %>%
+  mutate(plot=str_sub(name,19,21)) %>%
+  dplyr::select(name,plot)
+
+unique(dummy[,2])
+
+length(unique(dummy[,2]))
+
+# filter=="oreiman", len==29
+
+dat.james %>%
+  filter(len==29 & filter=="oreiman")
+# ok there are 2 lengths here, one one sampling day the date is appreviated from 11052020 to 110520, need to split out into 2 groups
+
+dat.james %>%
+  filter(len==29 & filter=="oreiman") %>%
+  mutate(plot=str_sub(name,21,23)) %>%
+  dplyr::select(name,plot)
+
+dummy <- dat.james %>%
+  filter(len==29 & filter=="oreiman") %>%
+  mutate(plot=str_sub(name,21,23)) %>%
+  dplyr::select(name,plot)
+
+unique(dummy[,2])
+
+length(unique(dummy[,2]))
+
+# filter== "r_orei_" 
+
+dat.james %>%
+  filter(filter=="r_orei_")
+
+dat.james %>%
+  filter(filter=="r_orei_") %>%
+  mutate(plot=str_sub(name,22,24)) %>%
+  dplyr::select(name,plot)
+
+dummy <- dat.james %>%
+  filter(filter=="r_orei_") %>%
+  mutate(plot=str_sub(name,22,24)) %>%
+  dplyr::select(name,plot) %>%
+  as.data.frame()
+
+unique(dummy[,2])
+
+length(unique(dummy[,2]))
+#this dataset is super small, just plot 302 might be naming error for one plot
+dat.james %>%
+  filter(date=="2021-05-18")
+#yes, ok it was just one plot. They'll get combined when grouped by date
+
+
+# filter=="orei_ro"
+dat.james %>%
+  filter(filter=="orei_ro")
+
+dat.james %>%
+  filter(filter=="orei_ro") %>%
+  mutate(plot=str_sub(name,20,22)) %>%
+  dplyr::select(name,plot)
+
+dummy <- dat.james %>%
+  filter(filter=="orei_ro") %>%
+  mutate(plot=str_sub(name,20,22)) %>%
+  dplyr::select(name,plot) %>%
+  as.data.frame()
+
+unique(dummy[,2])
+length(unique(dummy[,2]))
+
+
+
+```
+
+# plot extraction
+
+```{r plot extraction umn}
+
+dat.james.umn <- dat.james.umn %>%
+  rename(plot=V9) %>% 
+  as.data.frame()
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="manurer"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 12,end = 14)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="orei_04"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 15,end = 17)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="orei_r3"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 19,end = 21)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="oreiman" & dat.james.umn[i,9]=="27"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 19,end = 21)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="oreiman" & dat.james.umn[i,9]=="29"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 21,end = 23)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="r_orei_"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 22,end = 24)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+for (i in 1:length(dat.james.umn$filter)){
+if (dat.james.umn[i,8]=="orei_ro"){
+  dat.james.umn[i,10]<-str_sub(dat.james.umn[i,7],start = 20,end = 22)
+} else {
+  dat.james.umn[i,10]<-dat.james.umn[i,10]
+}}
+
+# dat.james.umn now has all the plot numbers extracted.
+# this represents all data collected on blue tablet
+
+```
+
+
+```{r plot extraction tli orei}
+# immediately need to fix weird observations recorded as occurring in 2009
+# it seems this occurred over multiple days
+
+dat.james.tli <- dat1 %>%
+  filter(filter %in% nams.jams.tli.orei) %>%
+  filter(date<="2019-12-31")
+
+dat.james.tli$name
+str_sub(dat.james.tli$name, 5,-10)
+unique(str_sub(dat.james.tli$name, 5,-10))
+
+str_sub(dat.james.tli[1,7], 5,-10)
+
+for (i in 1:length(dat.james.tli$date)){
+if(str_sub(dat.james.tli[i,7], 5,-10)==str_sub(dat.james.tli[1,7], 5,-10)){
+    dat.james.tli[i,2] <- "2021-03-31"
+  }else {
+    dat.james.tli[i,2] <- "2020-08-19"
+  }}
+
+datefix<-dat.james.tli
+
+# Now onto rest of data
+# this is easy as tli did a better job of consistent naming where plot number is
+
+dat.james.tli <- dat1 %>%
+  filter(filter %in% nams.jams.tli.orei) %>%
+  filter(date>="2019-12-31") %>%
+  rbind(datefix)
+
+rm(datefix)
+
+# code written for 2021 data file
+
+dat.james.tli <- dat.james.tli %>%
+  # filter(date>="2020-12-31") %>% #2021
+  # filter(date<="2020-12-31" & date>="2019-12-31") %>% #2020
+  # filter(date>="2020-12-31") %>%
+  mutate(plot=str_sub(name,13,-8)) 
+
+unique(dat.james.tli$plot)
+
+#take a look, can't really sort by plots without forcing them as numeric which will introduce NAs for values we are curious about.
+# Better to view in excel
+dat.james.tli %>%
+  # filter(plot %in% "1114" |
+  #        plot %in% "1115" |
+  #        plot %in% "8-2") %>%
+  select(date,name, time,plot) %>%
+  group_by(date) %>%
+  mutate(len=length(plot)) %>%
+  arrange(len,.by_group=T) %>%
+  write.csv("tli.plot.confusion.proxy.csv")
+##2021 weird values
+# 02real
+# 1114
+# 1115
+
+# 2020 weird values
+# "07="
+# "8-2"
+
+# also need to define plot as numeric vector to remove zero's prior to numbers
+
+dat.james.tli %>%
+  filter(plot %in% "02real") 
+
+dat.james.tli$plot <- ifelse(dat.james.tli$plot=="02real",
+       2,
+       dat.james.tli$plot)
+
+dat.james.tli$plot <- ifelse(dat.james.tli$date=="2021-04-21" &
+                               dat.james.tli$plot=="02",
+       3,
+       dat.james.tli$plot)
+
+dat.james.tli %>%
+  filter(plot %in% "1115")
+#checking with james, appears plot is 15
+dat.james.tli$plot <- ifelse(dat.james.tli$plot=="1115",
+       15,
+       dat.james.tli$plot)
+
+dat.james.tli %>%
+  filter(plot %in% "1114")
+#checking with james, appears plot is 14
+dat.james.tli$plot <- ifelse(dat.james.tli$plot=="1114",
+       14,
+       dat.james.tli$plot)
+
+dat.james.tli %>%
+  filter(plot %in% "07=")
+
+dat.james.tli$plot <- ifelse(dat.james.tli$plot=="07=",
+       7,
+       dat.james.tli$plot)
+
+# unsure about 8-2, need to check with James and madeline before changing
+dat.james.tli %>%
+  filter(plot %in% "8-2")
+
+dat.james.tli$plot <- ifelse(dat.james.tli$plot=="8-2",
+       9,
+       dat.james.tli$plot)
+
+unique(dat.james.tli$plot)
+unique(as.numeric(dat.james.tli$plot))
+dat.james.tli$plot<-as.numeric(dat.james.tli$plot)
+
+dat.james.tli %>%
+  arrange(plot) %>%
+  distinct(plot)
+
+```
+
+
+```{r combine datasets}
+
+tli <- dat.james.tli %>%
+  mutate(site="salinas",
+         plot=as.numeric(plot)) %>%
+  dplyr::select(id,date,time,co2,plot,site,
+                n20,ch4,nh3,temp)
+
+umn <- dat.james.umn %>%
+  mutate(site="rosemount",
+         plot=as.numeric(plot)) %>%
+  dplyr::select(id,date,time,co2,plot,site,
+                n20,ch4,nh3,temp)
+
+tli %>%
+  dplyr::select(plot) %>%
+  unique() %>%
+  arrange(plot)
+
+umn %>%
+  dplyr::select(plot) %>%
+  unique() %>%
+  arrange(plot)
+
+dat.james.tidy <- full_join(tli,umn)
+
+write.csv(dat.james.tidy,"james.data.all.csv")
+
+```
+
+```{r}
+dat.james.tidy %>%
+  group_by(date,plot) %>%
+  
+
+```
+
+
+#adding treatments by plot
+
+```{r rosemount codes, cache=T}
+# driveurl<- "https://docs.google.com/spreadsheets/d/1GHp29yl8oZXCyFgGhc117n41_HVwL7HkfZToE-0YPWQ/edit#gid=604700612"
+# orei.codes <- read_sheet(driveurl)
+orei.codes<-read.csv("treatment codes orei manure - Sheet2.csv")
+orei.codes$plot <- as.character(orei.codes$plot)
+
+
+dat.james.tidy<-dat.james %>%
+  dplyr::select(id,date,time,co2,plot)
+
+dat.james.tidy<-dplyr::inner_join(dat.james.tidy,orei.codes,by="plot")
+
+dat.james.tidy<-dat.james.tidy %>%
+  mutate(timing=as.factor(harvest_timing),
+         fert=as.factor(treatment)) %>%
+  dplyr::select(-harvest_timing,-treatment)
+
+write.csv(dat.james.tidy, file = "manurerose.gasmet.bluetab.tidy.csv")
+
+```
+
+```{r visualize, eval=F}
+dat <- dat.james.tidy %>%
+  filter(co2>350)
+
+# dat$time2 <- hms::as_hms(dat$time)
+
+dat %>%
+  filter(plot=="101" & date=="2020-11-19")
+
+dummy <- dat %>%
+  filter(plot=="101" & date=="2020-11-19")
+
+max(dummy$time)
+min(dummy$time)
+
+max(dummy$time)-min(dummy$time)
+int_length(c(max(dummy$time),min(dummy$time)))
+
+
+max(dummy$time2)
+min(dummy$time2)
+
+
+dummy <- dummy %>%
+  mutate(start=min(dummy$time2),
+         sec=dummy$time2-start)
+
+dummy %>%
+  ggplot(aes(sec,co2)) +
+  geom_point()
+
+
+dummy <- dat %>%
+  filter(date=="2020-11-19")
+
+dummy <- dummy %>%
+  mutate(start=min(dummy$time2),
+         sec=dummy$time2-start)
+
+dummy %>%
+  ggplot(aes(sec,co2,
+             group=plot)) +
+  geom_point()
+
+```
+
+For each sample date, we need to determine the minimum time value and subtract that from all time values in that date
+
+```{r graph it all, eval=F}
+dat %>%
+  group_by(date,plot) %>%
+  summarise(m=mean(co2),
+            tmin=min(time2),
+            tmax=max(time2),
+            ttrue=time2-(min(time2)))
+
+dat %>%
+  group_by(date,plot) %>%
+  summarise(co2=co2,
+            timing=timing,
+            fert=fert,
+            time=time2-(min(time2))) %>%
+  filter(time<500) %>%
+  ggplot(aes(time,co2,
+             group=date,
+             color=date)) +
+  geom_line() +
+  facet_wrap(~plot)
+
+```
+
+Analysis plan: first check on the old gasmet analysis script, then attempt to do the following steps
+
+
+## data from before blue tablet
+Earliest date we have for orei-manure is 20201102. this is according to spec.craziness file which has all the gasmet data recorded from the blue tablet.
+
+### google drive
+We have lots of text files, which we can read using code written by Jake, but I want to find .spec files as they allow us to reanalyze using different libraries
+
+1. gather all spec files in 2020/ManureRose folder
+2. output as single .txt file
+3. tidy up formats
+4. determine which dates we have
+5. cross check .spec file dates with .txt files
+6. repeat for 2019 folder in Gasmet data folder
+
+
+```{r}
+
+
+```
+
+### red tablet 
+
+There appears to be no data stored on the red tablet according to the "C:" drive, even though I know that Manbir recorded some data using the red tablet. It doesn't even seem that Calcmet was installed. 
+
+# eddyflux data extraction
+
+
+```{r}
+unique(dat1$filter)
+
+dat1 <- dat1 %>%
+  mutate(filter=str_sub(dat1$name,1,5))
+unique(dat1$filter)
+
+
+dat.jake <- dat1 %>%
+  filter(filter=="eddy "| filter=="eddyf" | filter=="i10_0" | filter=="v08_0")
+# View(dat.jake)
+  
+write.csv(dat.jake, file = "eddyflux.gasmet.bluetab.untidy.csv")
+```
+
+
+# tillage 
+
+```{r}
+unique(dat1$filter)
+
+dat.till.1 <- dat1 %>%
+  filter(filter=="r_til"| filter=="till_" | filter=="tilla" )
+
+# fine tune selection
+
+# dat.till.1 %>%
+#   mutate(nam=str_sub(.$name,1,9)) %>%
+#   group_by(filter) %>%
+#   select(name,filter,nam) %>%
+#   View()
+
+```
+
+```{r}
+dat.till.1
+str(dat.till.1)
+
+dat.till.1 %>%
+  as.data.frame() %>%
+  head() %>%
+  str()
+# columns 9 and 10 are empty for us to add into
+# appears date and time are reading correctly
+
+dat.till.1 <- dat.till.1 %>%
+  rename(plot=V9) %>%
+  mutate(nam=str_sub(.$name,1,9)) %>%
+  as.data.frame()
+
+```
+
+
+```{r tillage plot extraction}
+
+# r_til | r_till_10
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="r_til"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 8,end = 10)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# tilla | tillage2
+# tillage2_00846
+# NO ACTION BECAUSE NO PLOT NUMBER IN NAME
+
+# tilla | tillage_0
+# tillage_06212021_101_11753
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="tilla" & dat.till.1[i,15]=="tillage_0"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 18,end = 20)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+
+# till_ | till_v17_
+# till_v17_05282021_104_09371
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_v17_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+
+
+
+# till_ | till_v17
+# till_v17_05282021_104_09371
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_v17"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till__v17
+# till_v17_05282021_104_09371
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till__v17"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+
+# till_ | till_0329
+# till_03292021_101_02873
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_0329"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_0415
+# till_04152021_101_04071
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_0415"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_1120
+# till_11202020_103_02325
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_1120"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_1107
+# till_11072020_403_01726
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_1107"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = -9,end = -7)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+
+# till_ | till_105a
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_105a"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 9)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_105b
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_105b"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 9)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_105c
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_105c"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 9)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_105_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_105_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_301r
+# till_301real_05192021_08330
+
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_301r"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 12)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_301_
+# till_301_04282021_05277
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_301_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+
+```
+
+
+```{r}
+# already did 105 and 301
+# brute force! to avoid mistakes...
+# till_ | till_101_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_101_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_102_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_102_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_103_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_103_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_104_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_104_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_201_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_201_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_202_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_202_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_203_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_203_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_204_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_204_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_205_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_205_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# already did 301
+# till_ | till_302_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_302_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_303_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_303_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_304_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_304_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_305_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_305_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_401_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_401_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_402_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_402_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_403_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_403_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_404_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_404_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+# till_ | till_405_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,8]=="till_" & dat.till.1[i,15]=="till_405_"){
+  dat.till.1[i,9]<-str_sub(dat.till.1[i,7],start = 6,end = 8)
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+# till_ | till_304a_
+for (i in 1:length(dat.till.1$filter)){
+if (dat.till.1[i,9]=="04a"){
+  dat.till.1[i,9]<-"304a"
+} else {
+  dat.till.1[i,9]<-dat.till.1[i,9]
+}}
+
+```
+
+```{r}
+unique(dat.till.1$plot)
+
+dat.till.1 %>%
+  select(-c(nametype,filter,V10,nam)) %>%
+  write.csv("tillage.bluetab.csv")
+
+```
+
+## adding difftime (not working yet)
+
+```{r}
+
+dat.till.1$indicat<-NA
+dat.till.1$indicat[1]<-1
+for(i in 2:length(dat.till.1$id)){
+  if(dat.till.1[i,9] == dat.till.1[i-1,9]){
+    dat.till.1[i,17]<-0
+  }else{
+    dat.till.1[i,17]<-1
+  }}
+```
+
+
+```{r}
+dat.till.1<-as.data.frame(dat.till.1)
+dat.till.1$difftime<-NA
+dat.till.1$difftime[1]<-0
+
+i<-3
+as.numeric(difftime((dat.till.1[i,19]),
+                                        (dat.till.1[i-1,19]))) +
+                              dat.till.1[i-1,18]
+
+for(i in 2:length(dat.till.1$id)){
+  if(dat.till.1[i,17] == 0){
+    dat.till.1[18]<-as.numeric(difftime((dat.till.1[i,19]),
+                                        (dat.till.1[i-1,19]))) +
+                              dat.till.1[i-1,18]
+  }else{
+    dat.till.1[i,18]<-0
+  }}
+
+
+
+```
+
+
+
+# sensitivity to background
+
+Here we analyze the same sampling date (tillage on 1nov2021) with a background file max of 42k and of 38k. Identical spec files but different background files
+
+This was done by changing the reference .bkg file in "C:\Gasmet Technologies\Calcmet" from the most recent one which was at 42k with one taken a month earlier that was around 38k. 
+
+```{r}
+
+dat.42k <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/sensitivity.42k.txt")
+dat.38k <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/sensitivity.38k.txt")
+
+dat.38k$Carbon.dioxide.CO2 <- as.numeric(dat.38k$Carbon.dioxide.CO2)
+
+range(dat.42k$Carbon.dioxide.CO2)
+range(dat.38k$Carbon.dioxide.CO2, na.rm = T)
+
+mean(dat.42k$Carbon.dioxide.CO2)
+mean(dat.38k$Carbon.dioxide.CO2, na.rm=T)
+
+```
+
+There is absolutely no difference. I do not think the background files are used when analyzing the .spec files. 
+I emailed with Allan at Gasmet and they said the most recent background is used to subtract from all the spec files. 
+
+# TLI code
+
+
+```{r}
+
+```
+
