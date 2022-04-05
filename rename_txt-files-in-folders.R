@@ -31,7 +31,7 @@ file.rename(list.files(), paste0("fgi ", list.files()))
 setwd("~/R projects/gasmet")
 
 
-# to_lower ----------------------------------------------------------------
+# to_lower txt files ----------------------------------------------------------------
 mywd <- "~/R projects/gasmet"
 
 folder <-  "D:\\Shared drives\\SEECRS (Gutknecht) lab\\Gasmet data\\FGI\\Gasmet Data 2020\\txt"
@@ -47,5 +47,13 @@ list.files()
 setwd(mywd)
 
 
+# to_lower spe files ------------------------------------------------------
 
+mywd <- "~/R projects/gasmet"
 
+folder <- "D:\\Shared drives\\SEECRS (Gutknecht) lab\\Gasmet data\\FGI\\Gasmet Data 2020\\Samples\\20200818 - Copy"
+setwd(folder)
+list.files()
+
+file.rename(list.files(),tolower(list.files()))
+list.files()
