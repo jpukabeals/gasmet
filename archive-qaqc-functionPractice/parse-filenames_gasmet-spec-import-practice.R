@@ -1,4 +1,8 @@
 
+# This script practices importing in spe files that have been converted to txt
+# files
+
+# it's just a practice file for figuring out how to use functions
 
 # importing a single samplling day ----------------------------------------
 
@@ -64,7 +68,7 @@ dat2 <- dat2 %>%
 xyplot(co2~as.numeric(time),dat2)
 
 
-# importing multiple samplling days ---------------------------------------
+# importing multiple sampling days ---------------------------------------
 
 dat <- read.delim("C:/Users/pukab001/Desktop/calcmetsamplereanalyze/txt files/try2.TXT")
 

@@ -6,20 +6,18 @@ output: html_document
 gather all gasmet data and compile it into .csv files for analysis
 
 *to do*  
+see https://docs.google.com/document/d/1jHwLcnOMvuIlouX-dJhMJY4shUkIIGPnPF_pkG9udoE/edit
+
+* gather and import orei manure data collected in rosemount prior to blue tablet
+
 * use code from 'Analysis of OREI data for Rosemount...' to code in the creation of cumulative time. See lines 69+
-* gather and import orei manure data collected in rosemount prior to blue tablet. Currently waiting on serial cable for importing data off of PDA after not finding it on SD card in PDA nor red tablet
-* extract plot numbers from all file names
-* in tli data, there are plots 115 and 114 that I don't know what they are referring too and can't figure out what they should be based on the filename.
 
-
-*current issues*
-changed import from google sheets to csv's in the Downloads folder, issue is occurruing with how these files are being read sadly.
-I propose moving forward, we just record site and plot number in file name. Date and time is stored within spe file
 
 *algorithm* 
 download and gather all data into a folder 
 select just .spe files
-drag these .spe files into calcmet so they can all be analyzed in a batch and have a single output (.TXT)
+drag these .spe files into calcmet so they can all be analyzed in a batch and
+have a single output (.TXT)
 import these .txt files into R
 tidy (add helpers,
       extract identifiers,

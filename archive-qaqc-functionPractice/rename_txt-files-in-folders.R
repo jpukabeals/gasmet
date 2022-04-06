@@ -57,3 +57,10 @@ list.files()
 
 file.rename(list.files(),tolower(list.files()))
 list.files()
+
+setwd(mywd)
+
+
+
+
+
