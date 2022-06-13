@@ -142,19 +142,21 @@ densityplot(~temp|date,dat.temp)
 # fourth import 14560-19136, ending at end of till_v17_08022021
 # fifth import 19136-21566?, ending at ZERO_17433
 
+# folder destination
+compiled_text_files_location <- "C:\\Users\\pukab001\\Documents\\gasmet\\txt-outputs_compiled\\"
 
+list.files(compiled_text_files_location)
 
-dat.1 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.0.4802.4802.txt")
-# success!
+dat.1 <- read.delim(paste0(compiled_text_files_location,list.files(compiled_text_files_location)[1]))
 
-dat.2 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.4802.9693.4891.txt")
-# success!
+dat.2 <- read.delim(paste0(compiled_text_files_location,list.files(compiled_text_files_location)[2]))
 
-dat.3 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.9693.14560.4867.txt")
+dat.3 <- read.delim(paste0(compiled_text_files_location,list.files(compiled_text_files_location)[3]))
 
-dat.4 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.14560.19136.4576.txt")
+dat.4 <- read.delim(paste0(compiled_text_files_location,list.files(compiled_text_files_location)[4]))
 
-dat.5 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/item.19136.21566.2430.txt")
+dat.5 <- read.delim(paste0(compiled_text_files_location,list.files(compiled_text_files_location)[5]))
+
 
 dat <- rbind(dat.1,dat.2,dat.3,dat.4, dat.5)
 
@@ -210,6 +212,7 @@ rm(dat.6, dat.7, dat.8)
 
 dat.11 <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/pda.fancy.txt")
 # all files imported correctly
+
 
 dat <- rbind(dat,dat.11)
 rm(dat.11)
@@ -945,8 +948,6 @@ There appears to be no data stored on the red tablet according to the "C:" drive
 
 
 ```{r}
-unique(dat1$filter)
-
 dat1 <- dat1 %>%
   mutate(filter=str_sub(dat1$name,1,5))
 unique(dat1$filter)
@@ -961,6 +962,10 @@ write.csv(dat.jake, file = "eddyflux.gasmet.bluetab.untidy.csv")
 
 
 # tillage 
+I ended up doing the rest of the changes for Jake K with the gasmet data in excel, I recorded notes of what I did here.
+https://docs.google.com/document/d/1jHwLcnOMvuIlouX-dJhMJY4shUkIIGPnPF_pkG9udoE/edit
+
+
 
 ```{r}
 unique(dat1$filter)
