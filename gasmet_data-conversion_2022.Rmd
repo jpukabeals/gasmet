@@ -193,12 +193,6 @@ dat1 %>%
 
 ```{r}
 
-```
-
-
-
-```{r}
-
 
 dat2$filename[1]
 str_split(dat2$filename,
