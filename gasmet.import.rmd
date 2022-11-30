@@ -125,7 +125,7 @@ densityplot(~temp|date,dat.temp)
 
 
 ```{r blue tablet}
-# dat <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/blah.txt")
+dat <- read.delim("C:\\Users\\pukab001\\Desktop\\calcmetsamplereanalyze\\txt files/blah.txt")
 # View(dat)
 #only 16003 observations of the 21566 got transferred from calcmet into text file
 #at 5410kb, that's 2.96 observation per kb, at 21566 observations, we should expect a 7291kb file 

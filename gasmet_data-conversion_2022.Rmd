@@ -1,0 +1,460 @@
+---
+title: "gasmet_data-conversion_2022"
+author: "jesse puka-beals"
+date: "2022-11-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+# Overview
+
+Gasmet measurements are recorded using calcmet software
+
+This software generates .SPE files that are autosaves into a folder named by date. For example folder 20221027 is for the most recent sampling on October 27th. Each time someone takes measurements on a new day, the data from the last sampling date is compressed. For example, there was once a folder called 20221021 but it was compressed into "SAMPLE20221021_1" on october 27th when new samples were recorded. 
+
+Our objective is to get all of the data into a single data frame that has the date, the experiment, the field, the plot and the predicted gas concentrations (i.e. CO2 in ppm). 
+
+# Scope
+
+only 2022 data
+
+# Workflow steps
+
+1. convert the cabinet files (a compressed file format) into an unzipped and uncompressed format
+
+2. load the SPE files into calcmet and have calcmet predict the gas concentrations of interest and output those predictions into large files
+
+3. combine those large files of predicted values into a single file
+
+4. tidy that large file 
+
+5. done
+
+# convert cabinet files
+
+Cabinet files are located in the SEECRS google drive under gasmet data and then 2022
+
+I will make a new folder on my PC and copy all those files onto my physical computer first, in case there are any issues during this process, we are working on copies. 
+
+I found a free software called 7-Zip that converts/unzips cabinet files. At the time, my windows operating system could not do it
+
+Now I simply navigate within Z-zip to the folder on my PC that contains the cabinet files and select "extract". This takes about 2 minutes. To make this easier, I select "no pathnames" so it doesn't preserve the folder structure and I create a new folder called "data_all_spe" where I tell 7-Zip to dump all the files
+
+Now I drag in the files from the one sampling day that wasn't compressed 
+
+I also copy in the SPE files from that one folder that was not compressed "20221027".
+
+Now all the SPE files are in one place for 2022
+
+# load SPE files into calcmet and generate outputs
+
+Within Calcmet, I go to the toolbar on the top and select "Options" then "Result Output". 
+
+I make a new folder and send the result outputs to this new folder. They will all be in one file so I name the file "batch1"
+
+There are 20,629 files we are sending through gasmet. 
+
+# combine large output files into single file
+
+I tried in 2021 and again in 2022 to drag all SPE files into Calcmet and then generate one large output file, but it seems to be unable to produce a file larger than ~5k observations, so I have to break up the files and run them through calcmet in batches
+
+```{r}
+
+all_spe <- "C:\\Users\\pukab001\\Documents\\gasmet_data\\spe_all_2022\\"
+
+list.files(all_spe) %>% 
+  length()
+
+20629/7
+
+
+```
+
+We can create 7 folders and send 2947 files to each folder without any leftover
+
+```{r}
+basepath <- "C:\\Users\\pukab001\\Documents\\gasmet_data\\"
+paste0(basepath,"batches")
+dir.create(paste0(basepath,"batches"))
+
+for(i in 1:7){
+  dir.create(paste0(basepath,"batches\\","batch",i))
+}
+
+```
+
+we will need a key to tell the loop where to start and end it's indexing
+
+```{r}
+tibble(
+  batch = 1:7,
+  start = seq(from=1,by=2947,length.out=7),
+  end = start+2946
+) -> loop_key
+```
+
+
+```{r}
+
+list.files(all_spe)[1]
+paste0(all_spe,list.files(all_spe)[i])
+
+for (i in 1:length(loop_key$batch)) {
+  file.copy(
+  from = paste0(all_spe,list.files(all_spe)[loop_key$start[i]:
+                                            loop_key$end[i]]),
+  to = paste0(basepath,"batches\\","batch",i)
+)
+}
+
+```
+
+Now we drag these files into calcmet.
+
+First I go into Calcmet and select Options and Result Output. I change the file name each time to reflect the batch. For example, I enter batch1 for the result output file name, then I drag all of the SPE files into Calcmet and the generate the txt file output. Then I change the result output filename to batch2, then drag all the files from batch2 into calcmet and so on. 
+
+
+**combine output files into a single file**
+
+```{r}
+
+path <- "C:\\Users\\pukab001\\Documents\\gasmet_data\\calcmet_outputs\\"
+
+list.files(path)
+
+paste0(path,list.files(path)[1])
+
+# read.delim(paste0(path,list.files(path)[1]))
+# multibyte string error, weird
+# after troubleshooting for 1hr, solution is below fileEncoding arg
+# unclear if this is due to update with R or Calcmet
+# https://stat.ethz.ch/pipermail/r-help//2014-April/373464.html
+
+read.delim(paste0(path,list.files(path)[1]),
+                  fileEncoding="ISO-8859-1") -> all_batches
+
+for (i in 2:7) {
+        next_batch <- read.delim(paste0(path,list.files(path)[i]),
+                  fileEncoding="ISO-8859-1")
+        all_batches <- rbind(all_batches,next_batch)
+}
+```
+
+# tidy large file
+
+Now we have one large file!
+
+Time to clean up some column names
+
+```{r}
+dat <- all_batches
+View(dat)
+
+dat1 <- dat %>%
+  dplyr::select(Date,Time,SpectrumFile,Carbon.dioxide.CO2,
+                Nitrous.oxide.N2O,Methane.CH4,
+                Ammonia.NH3,Cell.temperature) %>%
+  rename(date=Date,
+         time=Time,
+         co2=Carbon.dioxide.CO2,
+         spectrumfile=SpectrumFile,
+         n2o=Nitrous.oxide.N2O,
+         ch4=Methane.CH4,
+         nh3=Ammonia.NH3,
+         temp=Cell.temperature) %>% 
+  rowid_to_column()
+
+View(dat1)
+
+```
+
+Now we want to split out that Spectrum file name
+
+The root for all these batches is the same so this will be super easy in the instances where the naming convention was followed
+
+```{r}
+library(stringr)
+
+# so all these files are from the same folder so this will
+dat1$spectrumfile[1]
+
+str_sub(dat1$spectrumfile,56,-5)[1]
+
+dat1 %>% 
+  mutate(filename = str_sub(spectrumfile,56,-5),
+         .before=date) -> dat2
+```
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+
+dat2$filename[1]
+str_split(dat2$filename,
+          pattern = "_",
+          simplify = T) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(experiment = V1,
+                site = V2,
+                date_check = V3,
+                plot = V4, 
+                calcmet_chronological_tally = V5) %>% 
+  cbind(dat2) -> dat3
+
+```
+
+Find the trouble makers
+
+So some of these start with "R_" and we need to get rid of those!
+
+```{r}
+
+dat3 %>% 
+  distinct(experiment)
+
+# starting with "R"
+dat3 %>% 
+  filter(experiment == "R") %>% 
+  mutate(filename = str_sub(filename,3)) %>% 
+  dplyr::select(-c(1:7)) -> dat_Rfix
+# correct file names
+
+str_split(dat_Rfix$filename,
+          pattern = "_",
+          simplify = T) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(experiment = V1,
+                site = V2,
+                date_check = V3,
+                plot = V4, 
+                calcmet_chronological_tally = V5) %>% 
+  bind_cols(dat_Rfix) -> dat_Rfix2
+
+# pull row id's of the new good dataset
+dat_Rfix2 %>% 
+  pull(rowid) -> dummy
+
+# filter out all the rowid's from the dat3 dataset that we will replace, then replace
+
+dat3 %>% 
+  # colnames()
+  # .["rowid" == 5]
+  filter(!rowid %in% dummy) %>% 
+  bind_rows(dat_Rfix2) -> dat4
+
+```
+
+```{r}
+dat4 %>% 
+  filter(experiment!="ZERO") -> dat5
+```
+
+When people used underscores to seperate month and day and year, it ruined everything!!!
+
+```{r}
+dat5 %>% 
+  # distinct(experiment)
+  mutate(V7 = na_if(V7,"")) %>% 
+  drop_na(V7) %>% 
+  dplyr::select(-c(1:7)) -> dat6
+
+dat6$filename[1] %>% 
+  str_sub(10,19) %>% 
+  str_replace("_","-") %>% 
+  str_replace("_","-")
+
+dat6 %>% 
+  # slice(1:3) %>% 
+  mutate(date1 = str_sub(filename,10,19),
+         date1 = str_replace(date1,"_","-"),
+         date1 = str_replace(date1,"_","-")) %>% 
+  # dplyr::select(date1)
+  mutate(start = str_sub(filename,1,9),
+         end = str_sub(filename,20)) %>% 
+  mutate(filename = paste0(start,date1,end)) %>% 
+  dplyr::select(-c(date1,start,end)) -> dat_datefix
+
+str_split(dat_datefix$filename,
+          pattern = "_",
+          simplify = T) %>% 
+  as.data.frame() %>% 
+  dplyr::rename(experiment = V1,
+                site = V2,
+                date_check = V3,
+                plot = V4, 
+                calcmet_chronological_tally = V5) %>% 
+  bind_cols(dat_datefix) -> dat_datefix2
+
+# working back into dat5
+dat5 %>% 
+  filter(!rowid %in% dat_datefix2$rowid) %>% 
+  bind_rows(dat_datefix2) -> dat7
+  
+```
+
+What is going on with this weird eddyflux name
+
+```{r}
+dat7 %>% 
+  # distinct(experiment)
+  # filter(experiment=="eddyfluedddyflux")
+  mutate(experiment = fct_recode(experiment,
+                                 "eddyflux" = "eddyfluedddyflux")) %>% 
+  dplyr::select(-c(V6,V7))-> dat8
+
+```
+
+```{r}
+dat8 %>% 
+  # colnames()
+  filter(experiment!="till") %>%  # this is 2021 data
+  filter(plot!="test" & plot!= "trial") -> dat9
+  
+# some plot numbers have an added "b" like 202b. I will leave these in the datasets
+```
+
+```{r}
+dat9 %>% 
+  # filter(co2>300) %>% 
+  ggplot(aes(co2)) +
+  stat_bin(aes(fill=experiment))
+
+dat9 %>% 
+  group_by(date) %>% 
+  summarise(median = median(co2)) %>% 
+  arrange(median)
+# looks like a lot of september/october data is bad
+
+dat9 %>% 
+  filter(co2>300) %>%
+  tally()
+
+(20391-14617)/20391*100
+# lost 28% of our dataset to the gasmet not recording measurements
+
+dat9 %>% 
+  filter(co2>300) -> dat10
+
+dat10[duplicated(dat10$rowid),]
+# no duplicated rowid values
+
+```
+
+
+```{r}
+dat10 %>% 
+  mutate(experiment = str_to_lower(experiment)) %>% 
+  rename(co2_ppm = co2,
+         n2o_ppm = n2o,
+         # n2o_ppm = n20,
+         ch4_ppm = ch4,
+         nh3_ppm = nh3,
+         temp_celsius = temp
+         ) -> dat11
+  
+dat11 %>% 
+  write.csv(
+    file = "gasmet_2022_all-site-data.csv",
+    row.names = F
+  )
+```
+
+# parsing it out 
+
+```{r eval=F}
+
+dat11 %>% 
+  # distinct(experiment)
+  # filter(experiment=="atat") %>% 
+  # filter(experiment=="eddyflux") %>%
+  # filter(experiment=="fert") %>%
+  filter(experiment=="ncas") %>%
+  write.csv(
+    file = "gasmet_2022_ncas.csv",
+    row.names = F
+  )
+
+```
+
+# Data vis
+
+Time to enjoy the fruits of our labor
+
+```{r}
+dat11 %>% 
+  ggplot(aes(co2_ppm)) +
+  stat_bin(aes(y=after_stat(density))) +
+  geom_density(aes(fill=date),
+               alpha=.3,
+               col=NA) +
+  theme_bw()
+
+# ggsave("co2_dist.png",
+#        width = 6,
+#        height = 6,
+#        units = "in",
+#        dpi=400)
+
+```
+
+```{r}
+dat11 %>% 
+  ggplot(aes(n2o_ppm)) +
+  # stat_bin(aes(y=after_stat(density))) +
+  geom_density(aes(fill=date),
+               alpha=.3,
+               col=NA) +
+  theme_bw()
+
+dat11 %>% 
+  ggplot(aes(ch4_ppm)) +
+  # stat_bin(aes(y=after_stat(density))) +
+  geom_density(aes(fill=date),
+               alpha=.3,
+               col=NA) +
+  theme_bw()
+
+dat11 %>% 
+  ggplot(aes(nh3_ppm)) +
+  # stat_bin(aes(y=after_stat(density))) +
+  geom_density(aes(fill=date),
+               alpha=.3,
+               col=NA) +
+  theme_bw()
+
+dat11 %>% 
+  ggplot(aes(temp_celsius)) +
+  # stat_bin(aes(y=after_stat(density))) +
+  geom_density(aes(fill=date),
+               alpha=.3,
+               col=NA) +
+  theme_bw()
+
+
+```
+
+```{r}
+dat11 %>% 
+  mutate(date = as.POSIXct(date)) %>% 
+  ggplot(aes(date,co2_ppm)) +
+  geom_jitter(width=.1,
+              alpha=.1) +
+  stat_smooth(method = "lm",
+              se=F,
+              linetype=3,
+              col=1) +
+  labs(x="",
+       caption = "overall respiration seemed to decline later in year, drought?")
+```
+
