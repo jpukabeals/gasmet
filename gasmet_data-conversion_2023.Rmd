@@ -5,6 +5,8 @@ date: "`r Sys.Date()`"
 output: 
   html_document
   # pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -27,9 +29,9 @@ only 2023 data
 
 # Workflow steps
 
-1. convert the cabinet files (a compressed file format) into an unzipped and uncompressed format
+1. convert the cabinet files (a compressed file format) into an unzipped and uncompressed format, do this on the laptop documents rather than on the google drive. too slow on google drive
 
-2. load the SPE files into calcmet and have calcmet predict the gas concentrations of interest and output those predictions into large files
+2. load the SPE files into calcmet and have calcmet predict the gas concentrations of interest and output those predictions into large files. This is options>results>fileOnDesktop. Batches should not exceed 5000 per batch
 
 3. combine those large files of predicted values into a single file
 
@@ -39,18 +41,21 @@ only 2023 data
 
 # convert cabinet files
 
-There was only one cabinet file...
+Use 7-Zip to a folder on computer
 
 # load SPE files into calcmet and generate outputs
 
 There were only 1922 files for 2023 as of 21Apr2023, so we only need one batch. 
+
+On 26June we have over 20k observations, I am just doing all of the files in 4 batches. 
 
 Need this fileEncoding arg to use read.delim()...
 
 ```{r}
 
 read.delim(
-  "2023data_20Apr2023.TXT",
+  # "2023data_20Apr2023.TXT",
+  "C:\\Users\\pukab001\\Documents\\gasmet_data\\spe_all_2023\\justncas.TXT",
   fileEncoding="ISO-8859-1") -> all_batches
 
 ```
@@ -93,16 +98,16 @@ library(stringr)
 # so all these files are from the same folder so this will
 dat1$spectrumfile[1]
 
-str_sub(dat1$spectrumfile,76,-5)[1]
+str_sub(dat1$spectrumfile,54,-5)[1]
 
 dat1 %>% 
-  mutate(filename = str_sub(spectrumfile,76,-5),
+  mutate(filename = str_sub(spectrumfile,54,-5),
          .before=date) -> dat2
 ```
 
 
 ```{r}
-dat2$filename[1]
+dat2$filename[1000]
 str_split(dat2$filename,
           pattern = "_",
           simplify = T) %>% 
@@ -121,12 +126,29 @@ str_split(dat2$filename,
 # disappear, suggesting this is just junk data, but it messes up the above code
 # so below I tidy up the column names to prep for export
 
-dat3 %>%
-  filter(co2>100) %>%
-  dplyr::select(-V6) -> dat4
+# dat3 %>%
+#   filter(co2>100) %>%
+#   dplyr::select(-V6) -> dat4
 
-# dat4 %>% 
-  # write.csv("gasmet_2023_ncas.csv",row.names=F)
+# reading in the earlier ncas data
+read.csv("gasmet_2023_ncas.csv") -> dat5
+
+dat3 %>% 
+  distinct(date_check)
+
+dat5 %>% 
+  distinct(date_check)
+
+rbind(
+  dat3,
+  dat5
+) -> dat6
+
+dat6 %>% 
+  select(-date_check) %>% 
+  write.csv("gasmet_2023_ncas_26Jun2023.csv",
+            row.names = F)
+
 
 
 ```
