@@ -45,6 +45,10 @@ Use 7-Zip to a folder on computer
 
 # load SPE files into calcmet and generate outputs
 
+I moved all SPE files from google drive to my documents. Nov2023 and spe_compiled. Now transfereed 2118 files to test. Going to transfer another 45215 files to test.
+
+test will have 47333 files, resulting in 10 batches of 5k files each.
+
 There were only 1922 files for 2023 as of 21Apr2023, so we only need one batch. 
 
 On 26June we have over 20k observations, I am just doing all of the files in 4 batches. 
@@ -53,10 +57,26 @@ Need this fileEncoding arg to use read.delim()...
 
 ```{r}
 
+
+# test to see if I got all text files in one go with Jess Laptop on 5Dec
+
+read.delim(
+  # "2023data_20Apr2023.TXT",
+  # "C:\\Users\\pukab001\\Documents\\gasmet_data\\spe_all_2023\\justncas.TXT",
+  "G:\\Shared drives\\SEECRS (Gutknecht) lab\\Data\\Gasmet data\\2023\\txt_all\\45271files_2023txt.txt",
+  fileEncoding="ISO-8859-1") -> all_batches
+
+# We should have 45k files, instead we have 9k
+
+
 read.delim(
   # "2023data_20Apr2023.TXT",
   "C:\\Users\\pukab001\\Documents\\gasmet_data\\spe_all_2023\\justncas.TXT",
   fileEncoding="ISO-8859-1") -> all_batches
+
+
+
+
 
 ```
 
